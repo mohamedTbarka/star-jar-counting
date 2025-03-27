@@ -19,23 +19,33 @@ class GodelianJar:
 
         # Initialize Pygame
         pygame.init()
-        self.display_width = 800
-        self.display_height = 700  # Increased height for more explanation
 
-        # Create display surface
-        self.display = pygame.display.set_mode((self.display_width, self.display_height))
+        # Get screen info for fullscreen
+        screen_info = pygame.display.Info()
+        self.display_width = screen_info.current_w
+        self.display_height = screen_info.current_h
+
+        # Create fullscreen display surface
+        self.display = pygame.display.set_mode((self.display_width, self.display_height), pygame.FULLSCREEN)
         pygame.display.set_caption("Gödelian Jar: The Undecidable Counting Problem")
 
         # Set background color
         self.background_color = (0, 0, 0)  # Black
         self.display.fill(self.background_color)
 
-        # Jar dimensions (in pixels for 2D)
+        # Calculate jar dimensions based on screen size
+        jar_height_ratio = 0.6  # Jar takes up 60% of screen height
+        self.jar_height = int(self.display_height * jar_height_ratio)
+        self.jar_width = int(self.jar_height * 0.5)  # Width is half of height
+
+        # Center the jar horizontally, position it in upper part of screen
         self.jar_center_x = self.display_width // 2
-        self.jar_center_y = self.display_height // 2 - 50  # Moved up to make room for explanations
-        self.jar_width = 300
-        self.jar_height = 400
+        jar_top_margin = int(self.display_height * 0.15)  # 15% from top of screen
+        self.jar_center_y = jar_top_margin + self.jar_height // 2
         self.jar_bottom_y = self.jar_center_y + self.jar_height // 2
+
+        # Calculate text area boundaries
+        self.text_top = self.jar_center_y + self.jar_height // 2 + 20  # Start text 20px below jar
 
         # If no specific count, make it "indecidable"
         if num_objects is None:
@@ -54,9 +64,17 @@ class GodelianJar:
         self.rotation_angle = 0
         self.rotation_speed = 1
         self.apparent_count = self.num_objects
-        self.display_font = pygame.font.SysFont('Arial', 24)
-        self.display_small_font = pygame.font.SysFont('Arial', 18)
-        self.display_title_font = pygame.font.SysFont('Arial', 28, bold=True)
+
+        # Create fonts with sizes relative to screen resolution
+        font_size_large = max(24, int(self.display_height * 0.03))
+        font_size_normal = max(18, int(self.display_height * 0.022))
+        font_size_small = max(16, int(self.display_height * 0.018))
+
+        self.display_font = pygame.font.SysFont('Arial', font_size_large)
+        self.display_small_font = pygame.font.SysFont('Arial', font_size_normal)
+        self.display_title_font = pygame.font.SysFont('Arial', int(font_size_large * 1.2), bold=True)
+        self.display_explanation_font = pygame.font.SysFont('Arial', font_size_small)
+
         self.count_update_interval = 10  # Frames between count updates
 
         # Define colors
@@ -89,8 +107,8 @@ class GodelianJar:
         self.axiom_boundaries = []
         for _ in range(4):
             self.axiom_boundaries.append({
-                'x': random.randint(100, self.display_width - 100),
-                'y': random.randint(100, self.display_height - 100),
+                'x': random.randint(int(self.display_width * 0.1), int(self.display_width * 0.9)),
+                'y': random.randint(int(self.display_height * 0.1), int(self.display_height * 0.9)),
                 'size': random.randint(20, 50),
                 'speed': random.uniform(0.2, 0.7)
             })
@@ -133,8 +151,9 @@ class GodelianJar:
             self.stars.append((x, y))
             self.star_depths.append(depth)
 
-            # Size varies with depth
-            size = random.uniform(3, 6) * (1 - 0.5 * abs(depth))
+            # Size varies with depth and screen resolution
+            base_size = self.display_height * 0.005  # Base size relative to screen height
+            size = random.uniform(base_size, base_size * 2) * (1 - 0.5 * abs(depth))
             self.star_sizes.append(size)
 
             # Initial visibility (some stars may be temporarily invisible)
@@ -413,43 +432,54 @@ class GodelianJar:
         # Draw undecidability visualization
         self.draw_undecidability_visualization()
 
-        # Render title
-        self.render_text(
+        # Render title at top
+        title_height = self.render_text(
             "Gödelian Jar: The Undecidable Counting Problem",
-            (self.display_width // 2, 20),
+            (self.display_width // 2, int(self.display_height * 0.05)),
             self.display_title_font,
             align='center'
         )
 
+        # Calculate text positions based on screen height
+        # Start text area at the bottom of the jar
+        text_start_y = self.jar_center_y + (self.jar_height // 2) + int(self.display_height * 0.05)
+
+        # Calculate spacing between text sections
+        section_spacing = int(self.display_height * 0.03)
+
         # Render the current object count
         count_height = self.render_text(
             f"Current view shows: {self.apparent_count} objects",
-            (20, self.display_height - 140),
+            (int(self.display_width * 0.05), text_start_y),
             self.display_font,
             self.highlight_color if self.show_counting_attempt else self.text_color
         )
 
         # Show counting status if active
         if self.show_counting_attempt:
-            progress_text = f"Counting attempt: {self.counting_progress}% complete"
+            progress_text = f"Counting attempt: {self.counting_progress:.1f}% complete"
             if self.counting_error:
                 progress_text += " - COUNTING ERROR DETECTED"
                 color = (255, 100, 100)
             else:
                 color = (100, 255, 100)
 
-            self.render_text(
+            count_status_height = self.render_text(
                 progress_text,
-                (20, self.display_height - 140 + count_height + 10),
+                (int(self.display_width * 0.05), text_start_y + count_height + 10),
                 self.display_small_font,
                 color
             )
+            # Adjust next text position if showing counting status
+            next_section_y = text_start_y + count_height + count_status_height + section_spacing
+        else:
+            next_section_y = text_start_y + count_height + section_spacing
 
         # Render the current Gödel statement with fading effect
         statement = self.godel_statements[self.current_statement]
-        self.render_text(
+        statement_height = self.render_text(
             f"Gödel's Insight: {statement}",
-            (self.display_width // 2, self.display_height - 80),
+            (self.display_width // 2, next_section_y),
             self.display_font,
             (self.text_color[0], self.text_color[1], self.text_color[2], self.statement_fade),
             align='center'
@@ -463,15 +493,25 @@ class GodelianJar:
             "the exact count in this jar is fundamentally undecidable."
         ]
 
-        y_pos = self.display_height - 40
-        for line in reversed(explanation):
-            text_height = self.render_text(
+        explanation_start_y = next_section_y + statement_height + section_spacing
+        line_spacing = int(self.display_height * 0.025)
+
+        for i, line in enumerate(explanation):
+            self.render_text(
                 line,
-                (self.display_width // 2, y_pos),
-                self.display_small_font,
+                (self.display_width // 2, explanation_start_y + i * line_spacing),
+                self.display_explanation_font,
                 align='center'
             )
-            y_pos -= text_height + 5
+
+        # Render controls at the bottom
+        controls_y = self.display_height - int(self.display_height * 0.05)
+        self.render_text(
+            "Controls: SPACE - Start/stop counting attempt | R - Reset | ESC - Exit",
+            (self.display_width // 2, controls_y),
+            self.display_small_font,
+            align='center'
+        )
 
         # Update the display
         pygame.display.flip()
@@ -512,6 +552,9 @@ class GodelianJar:
                         self.counting_progress = 0
                         self.counting_error = False
                         self.generate_objects()
+                    elif event.key == pygame.K_f:
+                        # Toggle fullscreen
+                        pygame.display.toggle_fullscreen()
 
             # Update rotation
             self.rotation_angle += self.rotation_speed
